@@ -1,12 +1,10 @@
 ﻿using JsonUtil;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Net;
-using System.Reflection;
 using System.Text;
 
-namespace BiliPassport.Bili.Models
+namespace Bili.Models
 {
     [Serializable]
     public class LoginInfo

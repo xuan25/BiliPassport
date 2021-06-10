@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace BiliPassport.Bili.Exceptions
+namespace Bili.Exceptions
 {
     public class LoginStatusException : Exception
     {

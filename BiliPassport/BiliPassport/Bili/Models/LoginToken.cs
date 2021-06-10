@@ -1,7 +1,7 @@
 ﻿using JsonUtil;
 using System;
 
-namespace BiliPassport.Bili.Models
+namespace Bili.Models
 {
     [Serializable]
     public class LoginToken
