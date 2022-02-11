@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 
@@ -23,9 +25,8 @@ namespace Bili
         /// </summary>
         /// <param name="username">username</param>
         /// <param name="password">password</param>
-        /// <param name="captcha">optional captcha</param>
         /// <returns>LoginInfo</returns>
-        public static LoginInfo Login(string username, string password, string captcha = null)
+        public static LoginInfo Login(string username, string password)
         {
             string encryptedPassword = EncryptPassword(password);
 
@@ -34,13 +35,10 @@ namespace Bili
                 { "username", username },
                 { "password", encryptedPassword },
             };
-            if (captcha != null)
-            {
-                payload.Add("captcha", captcha);
-            }
 
             string authUrl = "https://passport.bilibili.com/api/v3/oauth2/login";
             Json.Value res = BiliApi.RequestJsonResult(authUrl, payload, true, "POST");
+            Console.WriteLine(res.ToString());
 
             switch ((int)res["code"])
             {
@@ -53,6 +51,77 @@ namespace Bili
                         default:
                             throw new LoginStatusException(res["data"]["status"], res);
                     }
+                case -105: // captcha required
+                    string url = res["data"]["url"];
+                    AuthWindow authWindow = null;
+                    ManualResetEvent windowInitedEvent = new ManualResetEvent(false);
+                    Thread thread = new Thread(() =>
+                    {
+                        authWindow = new AuthWindow(new Uri(url));
+                        windowInitedEvent.Set();
+                        authWindow.ShowDialog();
+                    })
+                    {
+                        IsBackground = true
+                    };
+                    thread.SetApartmentState(ApartmentState.STA);
+                    thread.Start();
+
+                    windowInitedEvent.WaitOne();
+                    authWindow.CodeObtainedEvent.WaitOne();
+                    authWindow.Dispatcher.Invoke(() =>
+                    {
+                        authWindow.Close();
+                    });
+
+                    var cookie = authWindow.Cookies;
+                    BiliApi.Cookies.Add(cookie);
+
+                    return Login(username, password, authWindow.Challenge, authWindow.Validate);
+                case -629: // incorrect password
+                default:
+                    throw new LoginFailedException(res["code"], res["message"]);
+            }
+        }
+
+        /// <summary>
+        /// Login with username and password
+        /// </summary>
+        /// <param name="username">username</param>
+        /// <param name="password">password</param>
+        /// <param name="challenge">challenge</param>
+        /// <param name="validate">validate</param>
+        /// <returns>LoginInfo</returns>
+        public static LoginInfo Login(string username, string password, string challenge, string validate)
+        {
+            string encryptedPassword = EncryptPassword(password);
+
+            Dictionary<string, string> payload = new Dictionary<string, string>()
+            {
+                { "username", username },
+                { "password", encryptedPassword },
+                { "challenge", challenge },
+                { "validate", validate },
+                { "seccode", $"{validate}|jordan" },
+            };
+
+            string authUrl = "https://passport.bilibili.com/api/v3/oauth2/login";
+            Json.Value res = BiliApi.RequestJsonResult(authUrl, payload, true, "POST");
+            Console.WriteLine(res.ToString());
+
+            switch ((int)res["code"])
+            {
+                case 0:
+                    switch ((int)res["data"]["status"])
+                    {
+                        case 0:
+                            LoginInfo loginInfo = new LoginInfo(res["data"]);
+                            return loginInfo;
+                        default:
+                            throw new LoginStatusException(res["data"]["status"], res);
+                    }
+                case -105: // captcha required
+                case -629: // incorrect password
                 default:
                     throw new LoginFailedException(res["code"], res["message"]);
             }
@@ -63,11 +132,11 @@ namespace Bili
         /// </summary>
         /// <param name="password">Plain password</param>
         /// <returns>Encrypted password</returns>
-        public static Task<LoginInfo> LoginAsync(string username, string password, string captcha = null)
+        public static Task<LoginInfo> LoginAsync(string username, string password)
         {
             Task<LoginInfo> task = new Task<LoginInfo>(() =>
             {
-                return Login(username, password, captcha);
+                return Login(username, password);
             });
             task.Start();
             return task;
