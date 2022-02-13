@@ -22,7 +22,9 @@ namespace Bili
         public ManualResetEvent CodeObtainedEvent { get; private set; }
         private WebView2 AuthView { get; set; }
 
-        public AuthWindow(Uri source)
+        CookieCollection cookieCollection;
+
+        public AuthWindow(Uri source, CookieCollection cookieCollection)
         {
             Width = 300;
             Height = 300;
@@ -33,17 +35,50 @@ namespace Bili
             AuthView = new WebView2();
             this.Content = AuthView;
 
-            AuthView.Source = source;
             AuthView.CoreWebView2InitializationCompleted += AuthView_CoreWebView2InitializationCompleted;
+            AuthView.Source = source;
 
             Challenge = Regex.Match(source.AbsoluteUri, "&challenge=([0-9a-z]+)").Groups[1].Value;
+
+            this.cookieCollection = cookieCollection;
         }
 
-        private void AuthView_CoreWebView2InitializationCompleted(object sender, Microsoft.Web.WebView2.Core.CoreWebView2InitializationCompletedEventArgs e)
+        private async void AuthView_CoreWebView2InitializationCompleted(object sender, Microsoft.Web.WebView2.Core.CoreWebView2InitializationCompletedEventArgs e)
         {
+            Json.Value.Array carray = new Json.Value.Array();
+            foreach (Cookie cookie in this.cookieCollection)
+            {
+                Json.Value.Object cobj = new Json.Value.Object()
+                {
+                    { "name", cookie.Name },
+                    { "value", cookie.Value },
+                    { "domain", cookie.Domain },
+                    { "path", cookie.Path },
+                    { "secure", cookie.Secure },
+                    { "httpOnly", cookie.HttpOnly },
+                    { "expires", ToUnixTimeStamp(cookie.Expires) }
+                };
+                string str = cobj.ToString();
+                carray.Add(cobj);
+            }
+
+            Json.Value.Object @object = new Json.Value.Object()
+            {
+                { "cookies", carray }
+            };
+
+            string cookieRes = await AuthView.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.setCookies", @object.ToString());
+
             AuthView.CoreWebView2.WebResourceResponseReceived += CoreWebView2_WebResourceResponseReceived;
             AuthView.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
             AuthView.CoreWebView2.AddWebResourceRequestedFilter(null, Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+        }
+
+        public static long ToUnixTimeStamp(DateTime date)
+        {
+            DateTime originDate = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+            TimeSpan diff = date.ToUniversalTime() - originDate;
+            return (long)Math.Floor(diff.TotalSeconds);
         }
 
         private void CoreWebView2_WebResourceRequested(object sender, Microsoft.Web.WebView2.Core.CoreWebView2WebResourceRequestedEventArgs e)

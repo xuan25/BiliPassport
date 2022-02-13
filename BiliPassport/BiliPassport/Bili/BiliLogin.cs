@@ -34,6 +34,14 @@ namespace Bili
             {
                 { "username", username },
                 { "password", encryptedPassword },
+
+                { "mobi_app", "android" },
+                { "platform", "android" },
+
+                //{ "channel", $"bili" },
+                //{ "buvid", $"743E33F2-25DE-484D-ABE5-5FA92F7B15C4148804infoc" },
+                //{ "local_id", $"743E33F2-25DE-484D-ABE5-5FA92F7B15C4148804infoc" },
+                { "ts", $"{DateTimeOffset.Now.ToUnixTimeSeconds()}" },
             };
 
             string authUrl = "https://passport.bilibili.com/api/v3/oauth2/login";
@@ -57,7 +65,7 @@ namespace Bili
                     ManualResetEvent windowInitedEvent = new ManualResetEvent(false);
                     Thread thread = new Thread(() =>
                     {
-                        authWindow = new AuthWindow(new Uri(url));
+                        authWindow = new AuthWindow(new Uri(url), GetAllCookies(BiliApi.Cookies));
                         windowInitedEvent.Set();
                         authWindow.ShowDialog();
                     })
@@ -84,6 +92,40 @@ namespace Bili
             }
         }
 
+        private static CookieCollection GetAllCookies(CookieContainer cookieJar)
+        {
+            CookieCollection cookieCollection = new CookieCollection();
+            System.Collections.Hashtable table = (System.Collections.Hashtable)cookieJar.GetType().InvokeMember("m_domainTable",
+                                                                            System.Reflection.BindingFlags.NonPublic |
+                                                                            System.Reflection.BindingFlags.GetField |
+                                                                            System.Reflection.BindingFlags.Instance,
+                                                                            null,
+                                                                            cookieJar,
+                                                                            new object[] { });
+            foreach (var tableKey in table.Keys)
+            {
+                String str_tableKey = (string)tableKey;
+                if (str_tableKey[0] == '.')
+                {
+                    str_tableKey = str_tableKey.Substring(1);
+                }
+                System.Collections.SortedList list = (System.Collections.SortedList)table[tableKey].GetType().InvokeMember("m_list",
+                                                                            System.Reflection.BindingFlags.NonPublic |
+                                                                            System.Reflection.BindingFlags.GetField |
+                                                                            System.Reflection.BindingFlags.Instance,
+                                                                            null,
+                                                                            table[tableKey],
+                                                                            new object[] { });
+                foreach (var listKey in list.Keys)
+                {
+                    String url = "https://" + str_tableKey + (string)listKey;
+                    cookieCollection.Add(cookieJar.GetCookies(new Uri(url)));
+                }
+            }
+
+            return cookieCollection;
+        }
+
         /// <summary>
         /// Login with username and password
         /// </summary>
@@ -103,6 +145,14 @@ namespace Bili
                 { "challenge", challenge },
                 { "validate", validate },
                 { "seccode", $"{validate}|jordan" },
+
+                { "mobi_app", "android" },
+                { "platform", "android" },
+
+                //{ "channel", $"bili" },
+                //{ "buvid", $"743E33F2-25DE-484D-ABE5-5FA92F7B15C4148804infoc" },
+                //{ "local_id", $"743E33F2-25DE-484D-ABE5-5FA92F7B15C4148804infoc" },
+                { "ts", $"{DateTimeOffset.Now.ToUnixTimeSeconds()}" },
             };
 
             string authUrl = "https://passport.bilibili.com/api/v3/oauth2/login";
